@@ -190,9 +190,25 @@ async function loadScores(code,season) {
     failures.push({page:'all',error:`pagination reported ${totalRecords} records but retrieved ${rawCount}; refusing to call the dataset complete`});
   }
   const all=Array.from(map.values());
-  const matched=all.filter(r=>r.season===season);
+  // Upstream activityId query responses can contain unrelated sports. Filtering
+  // only the URL allowed three other-sport regional games into Lake Park football
+  // (3-9 vs the verified 2-8). Enforce row-level classification independently.
+  const allSeason=all.filter(r=>r.season===season);
+  const mismatchedActivity=code==='ALL'?[]:allSeason.filter(r=>r.activityId!==code);
+  const activityMatched=code==='ALL'?allSeason:allSeason.filter(r=>r.activityId===code);
+  function categoryConflicts(row) {
+    const category=String(row.category||'').trim().toLowerCase();
+    if(!category)return false;
+    if(code==='FB')return !category.includes('football')||category.includes('flag');
+    if(code==='FFG')return !category.includes('flag');
+    return false;
+  }
+  const mismatchedCategory=code==='ALL'?[]:activityMatched.filter(categoryConflicts);
+  const matched=activityMatched.filter(r=>!categoryConflicts(r));
+  const unexpectedCodes={};
+  for(const row of mismatchedActivity){const key=row.activityId||'MISSING';unexpectedCodes[key]=(unexpectedCodes[key]||0)+1;}
   const availableSeasons=Array.from(new Set(all.map(r=>r.season).filter(Boolean))).sort((a,b)=>b-a);
-  const result={ok:complete,source:'IHSA API',endpoint:'/v1/scores',code,season,requestedPageSize:PAGE_SIZE,reportedPageSize:reportedSize,advertisedPages,pagesFetched:pages.filter(Boolean).length,allPagesFetched:complete,reportedTotalRecords:Number.isFinite(totalRecords)?totalRecords:null,rawCount,normalizedCount:all.length,matchedSeasonCount:matched.length,availableSeasons,invalidCount,failures,games:matched,checkedAt:new Date().toISOString(),notes:'All pages retrieved is not a guarantee that every school reported every contest.'};
+  const result={ok:complete,source:'IHSA API',endpoint:'/v1/scores',code,season,requestedPageSize:PAGE_SIZE,reportedPageSize:reportedSize,advertisedPages,pagesFetched:pages.filter(Boolean).length,allPagesFetched:complete,reportedTotalRecords:Number.isFinite(totalRecords)?totalRecords:null,rawCount,normalizedCount:all.length,sourceSeasonCount:allSeason.length,excludedActivityCount:mismatchedActivity.length,excludedCategoryCount:mismatchedCategory.length,unexpectedActivityCodes:unexpectedCodes,matchedSeasonCount:matched.length,availableSeasons,invalidCount,failures,games:matched,checkedAt:new Date().toISOString(),notes:'Rows are strictly filtered by ActivityID; untrusted upstream activityId queries may return unrelated sports. Retrieved pages do not guarantee complete school reporting.'};
   if(complete)cacheSet(key,result);
   return result;
 }
