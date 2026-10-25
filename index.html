@@ -56,22 +56,22 @@ const SCHOOL='1829', $=id=>document.getElementById(id);
   }
 })();
 const sports=[
-  {name:'Football',icon:'🏈',programs:[{name:'Boys Tackle',code:'FB',mapping:'confirmed'},{name:'Girls Flag',code:'FFG',mapping:'candidate',requireFlag:true}],levels:['Varsity','JV','Sophomore','Freshman']},
-  {name:'Basketball',icon:'🏀',programs:[{name:'Boys',code:'BB',mapping:'confirmed'},{name:'Girls',code:'GBB',mapping:'confirmed'}],levels:['Varsity','JV','Sophomore','Freshman']},
-  {name:'Baseball',icon:'⚾',programs:[{name:'Boys',code:'BS',mapping:'confirmed'}],levels:['Varsity','JV','Sophomore','Freshman']},
-  {name:'Softball',icon:'🥎',programs:[{name:'Girls',code:'SB',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
-  {name:'Soccer',icon:'⚽',programs:[{name:'Boys',code:'SC',mapping:'confirmed'},{name:'Girls',code:'GSC',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
-  {name:'Volleyball',icon:'🏐',programs:[{name:'Boys',code:'BVB',mapping:'confirmed'},{name:'Girls',code:'VB',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
+  {name:'Football',icon:'🏈',programs:[{name:'Boys Tackle',code:'FB',mapping:'confirmed'},{name:'Girls Flag',code:'FFG',mapping:'confirmed',requireFlag:true}],levels:['Varsity','JV','Sophomore','Freshman']},
+  {name:'Basketball',icon:'🏀',programs:[{name:'Boys',code:'BKB',mapping:'confirmed'},{name:'Girls',code:'BKG',mapping:'confirmed'}],levels:['Varsity','JV','Sophomore','Freshman']},
+  {name:'Baseball',icon:'⚾',programs:[{name:'Boys',code:'BA',mapping:'confirmed'}],levels:['Varsity','JV','Sophomore','Freshman']},
+  {name:'Softball',icon:'🥎',programs:[{name:'Girls',code:'SBG',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
+  {name:'Soccer',icon:'⚽',programs:[{name:'Boys',code:'SOB',mapping:'confirmed'},{name:'Girls',code:'SOG',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
+  {name:'Volleyball',icon:'🏐',programs:[{name:'Boys',code:'VBB',mapping:'confirmed'},{name:'Girls',code:'VBG',mapping:'confirmed'}],levels:['Varsity','JV','Freshman']},
   {name:'Wrestling',icon:'🤼',programs:[{name:'Boys',code:'WR',mapping:'shared',gender:'boys'},{name:'Girls',code:'WR',mapping:'shared',gender:'girls'}],levels:['Varsity','JV']},
   {name:'Track & Field',icon:'🏃',programs:[{name:'Boys',code:'TF',mapping:'confirmed'},{name:'Girls',code:'GTF',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Cross Country',icon:'🏃',programs:[{name:'Boys',code:'CC',mapping:'confirmed'},{name:'Girls',code:'GCC',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Golf',icon:'⛳',programs:[{name:'Boys',code:'GO',mapping:'confirmed'},{name:'Girls',code:'GGO',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Tennis',icon:'🎾',programs:[{name:'Boys',code:'TE',mapping:'confirmed'},{name:'Girls',code:'GTE',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Swimming',icon:'🏊',programs:[{name:'Boys',code:'SW',mapping:'confirmed'},{name:'Girls',code:'GSW',mapping:'confirmed'}],levels:['Varsity','JV']},
-  {name:'Water Polo',icon:'🤽',programs:[{name:'Boys',code:'WP',mapping:'shared',gender:'boys'},{name:'Girls',code:'WP',mapping:'shared',gender:'girls'}],levels:['Varsity','JV']},
+  {name:'Water Polo',icon:'🤽',programs:[{name:'Boys',code:'WPB',mapping:'confirmed'},{name:'Girls',code:'WPG',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Bowling',icon:'🎳',programs:[{name:'Boys',code:'BW',mapping:'shared',gender:'boys'},{name:'Girls',code:'BW',mapping:'shared',gender:'girls'}],levels:['Varsity','JV']},
   {name:'Gymnastics',icon:'🤸',programs:[{name:'Girls',code:'GGY',mapping:'confirmed'},{name:'Boys',code:'GY',mapping:'confirmed'}],levels:['Varsity','JV']},
-  {name:'Lacrosse',icon:'🥍',programs:[{name:'Boys',code:'LA',mapping:'shared',gender:'boys'},{name:'Girls',code:'LA',mapping:'shared',gender:'girls'}],levels:['Varsity','JV']},
+  {name:'Lacrosse',icon:'🥍',programs:[{name:'Boys',code:'LCB',mapping:'confirmed'},{name:'Girls',code:'LCG',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Competitive Cheer',icon:'📣',programs:[{name:'Team',code:'CH',mapping:'confirmed'}],levels:['Varsity','JV']},
   {name:'Competitive Dance',icon:'💃',programs:[{name:'Team',code:'DA',mapping:'confirmed'}],levels:['Varsity','JV']}
 ];
@@ -90,7 +90,7 @@ function seasonGames(){return feed?.ok?feed.games||[]:[]}
 function selectedProgram(){return sport.programs.find(p=>p.name===$('program').value)||sport.programs[0]}
 function genderMatch(g,p){if(p.mapping!=='shared')return true;const raw=term(`${g.category} ${g.gender}`);return p.gender==='girls'?/\b(girls|female|women)\b/.test(raw):/\b(boys|male|men)\b/.test(raw)}
 function levelMatch(g,level=$('level').value){const selected=level.toLowerCase();const label=term(g.level);if(!label)return selected==='varsity';if(selected==='jv')return label.includes('junior varsity')||/\bjv\b/.test(label);if(selected==='varsity')return label.includes('varsity')&&!label.includes('junior');return label.includes(selected)}
-function programMatch(g){const p=selectedProgram(),raw=term(`${g.category} ${g.gender}`);if(p.requireFlag)return raw.includes('flag');if(sport.name==='Football'&&raw.includes('flag'))return false;return genderMatch(g,p)}
+function programMatch(g){const p=selectedProgram(),raw=term(`${g.category} ${g.gender}`);if(p.requireFlag)return g.activityId==='FFG'||raw.includes('flag');if(sport.name==='Football'&&raw.includes('flag'))return false;return genderMatch(g,p)}
 function applicable(g){return programMatch(g)&&levelMatch(g)}
 function gamesForSelection(){return seasonGames().filter(applicable)}
 function gameResultSummary(games,id){let w=0,l=0,t=0,pf=0,pa=0,played=0;
@@ -169,8 +169,8 @@ function drawDiagnostics(){const p=selectedProgram();$('diagnosticText').textCon
 const IHSA_OVERVIEW_SNAPSHOT=[
  {sport:'Football',program:'Boys Tackle',code:'FB',label:'Football (tackle)',w:2,l:8,t:0},
  {sport:'Football',program:'Girls Flag',code:'FFG',label:'Girls flag football',w:14,l:5,t:0},
- {sport:'Soccer',program:'Boys',code:'SC',label:'Boys soccer',w:13,l:8,t:1},
- {sport:'Volleyball',program:'Girls',code:'VB',label:'Girls volleyball',w:20,l:11,t:0}
+ {sport:'Soccer',program:'Boys',code:'SOB',label:'Boys soccer',w:13,l:8,t:1},
+ {sport:'Volleyball',program:'Girls',code:'VBG',label:'Girls volleyball',w:20,l:11,t:0}
 ];
 function allCompletedSummary(games,id){let w=0,l=0,t=0;
   for(const g of games){if(!isFinal(g))continue;const result=outcome(g,id);if(result==='W')w++;else if(result==='L')l++;else if(result==='T')t++;}
