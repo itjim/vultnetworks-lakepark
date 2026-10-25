@@ -1,6 +1,6 @@
 [build]
   # Publish only the generated static site; do not expose serverless source or review docs.
-  command = "mkdir -p dist && cp index.html dist/index.html"
+  command = "node --test tests/*.test.mjs && mkdir -p dist && cp index.html dist/index.html"
   publish = "dist"
   functions = "netlify/functions"
 
