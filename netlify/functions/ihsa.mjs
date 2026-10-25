@@ -95,6 +95,12 @@ export function normalizeScore(r) {
   // TourneyLevel is a competition stage (e.g. "Regular Season"), NOT Varsity/JV.
   const category=String(r.SportCategory||'').trim();
   const gender=String(r.Gender||r.GenderCategory||'').trim();
+  // MaxPreps metadata is relayed by IHSA; it is a secondary signal, not an independent request.
+  const mpTopScore=numberScore(top.TopMPScore);
+  const mpBottomScore=numberScore(bottom.BottomMPScore);
+  const mpScoreMatch=mpTopScore!==null&&mpBottomScore!==null&&hasScore
+    ? mpTopScore===topScore&&mpBottomScore===bottomScore : null;
+  const mpReportedAgreement=typeof r.MaxPreps?.Agrees==='boolean'?r.MaxPreps.Agrees:null;
   const date=parseDate(r.GameDate);
   const contestId=String(r.ContestID ?? r.Slug ?? `${date}-${topId}-${bottomId}`);
   return {
@@ -105,6 +111,12 @@ export function normalizeScore(r) {
     site:String(r.Site||'').trim(), scoreStatus, providerStatus,
     winner, isFinal, hasScore, source:String(r.ScoreSource||r.GameSource||'unreported'),
     sourceVerified:scoreStatus==='verified', level, updated:r.LastUpdate||null,
+    maxpreps: {
+      ihsaReportedAgreement:mpReportedAgreement,
+      embeddedScoreMatch:mpScoreMatch,
+      mpContestId:r.MaxPreps?.MPContestID||null,
+      status:String(r.MaxPreps?.Status||'').trim(),
+    },
   };
 }
 export function normalizeSchool(s) {
