@@ -19,6 +19,18 @@ main{max-width:1140px;margin:0 auto;padding:18px 16px 45px}h2{font-size:1.28rem;
   <p id="officialReferenceNote" class="subtle">Reference records do not certify a team level. Unclassified games in the API are still provisionally shown under Varsity; an agreement in total does not verify each game. Missing games or a different postseason scope may cause a difference.</p>
   <p class="source">Sources: <a href="https://www.ihsa.org/schools/details/1829SS" target="_blank" rel="noopener noreferrer">IHSA Lake Park overview</a> · <a href="https://www.ihsa.org/data/school/records/sum1829.htm" target="_blank" rel="noopener noreferrer">IHSA season summaries</a>. Last manual comparison reference: Oct 25, 2026. The records displayed above will not update unless this snapshot is reviewed.</p>
 </section>
+<section class="card hide" id="maxprepsReference">
+  <div class="bar"><div><div class="eyebrow">SECONDARY SOURCE CHECK · MAXPREPS VARSITY FOOTBALL · FALL 2026</div><h2 style="margin:2px 0">Game-by-game independent schedule comparison</h2></div><a class="btnsmall" href="https://www.maxpreps.com/il/roselle/lake-park-lancers/football/schedule/" target="_blank" rel="noopener noreferrer">Open MaxPreps varsity schedule ↗</a></div>
+  <p>Published MaxPreps 2026 varsity schedule (last updated <strong>Oct 24, 2026</strong>) is a dated reference, not a live feed. Its ten final games report <strong>2–8 overall</strong>, <strong>1–6 DuKane</strong>, <strong>188 points for</strong> and <strong>314 against</strong>. The table compares each opponent, date and score with the IHSA API; missing or different results are identified, not invented.</p>
+  <div class="gridstats">
+    <div class="stat"><span>MaxPreps varsity fixtures</span><strong>10</strong></div>
+    <div class="stat"><span>Exact IHSA fixture + score matches</span><strong id="maxprepsMatched">—</strong></div>
+    <div class="stat"><span>Differences / absent from API</span><strong id="maxprepsIssues">—</strong></div>
+  </div>
+  <div id="maxprepsNotice" class="notice">Waiting for IHSA feed to compare the ten published fixtures.</div>
+  <div class="scroll"><table><thead><tr><th>Date</th><th>Opponent</th><th>MaxPreps LP–Opp</th><th>IHSA LP–Opp</th><th>Fixture cross-check</th><th>IHSA-embedded MP status</th></tr></thead><tbody id="maxprepsRows"><tr><td colspan="6">Waiting for verified API response.</td></tr></tbody></table></div>
+  <p class="source">Attribution: <a href="https://www.maxpreps.com/il/roselle/lake-park-lancers/football/schedule/" target="_blank" rel="noopener noreferrer">MaxPreps Lake Park Varsity Football schedule</a>. MaxPreps identifies itself as an IHSA partner; the two sources may share underlying results. The embedded MaxPreps agreement indicator, if available, is reported by the IHSA feed—not fetched directly from MaxPreps. This reference will not update automatically without further source authorization or a new verified snapshot. Unofficial independent Vult Networks analysis; no MaxPreps or IHSA endorsement.</p>
+</section>
 <section class="card" id="allSportsOverview"><div class="bar"><div><div class="eyebrow">POSTMAN COLLECTION · ALL SPORTS</div><h2 style="margin:2px 0">Lake Park reported contests by sport</h2></div><button id="loadOverview" class="btnprimary" type="button">Load all-sports overview</button></div><p>Loads every available page of the unfiltered IHSA scores endpoint for the selected school year. Counts represent reported contests, <strong>not</strong> varsity-level verification or official all-sports win/loss standings.</p><div id="overviewStatus" class="notice" aria-live="polite">Not requested. Use the button to load full-season counts.</div><div class="twocol"><div class="stat"><span>Reported Lake Park contests</span><strong id="overviewTotal">—</strong></div><div class="stat"><span>Source pages retrieved</span><strong id="overviewPages">—</strong></div></div><div class="tablewrap"><table><thead><tr><th>Activity code</th><th>Reported Lake Park contests</th></tr></thead><tbody id="overviewBody"><tr><td colspan="2">No all-sports data loaded yet.</td></tr></tbody></table></div></section>
 <section class="card"><h2>Choose a sport</h2><div class="sports" id="sportButtons"></div></section>
 <section class="card"><div class="bar"><div><div class="eyebrow">TEAM EXPLORER</div><h2 id="sportTitle" style="margin:3px 0">Football</h2></div><span class="tag" id="context">2026–27</span></div><div class="controls"><div><label for="program">Program</label><select id="program"></select></div><div><label for="level">Level</label><select id="level"></select></div><div><label for="season">School year</label><select id="season"><option value="2026">2026–27</option><option value="2025">2025–26</option><option value="2024">2024–25</option></select></div></div><p class="subtle">Select a sport first, then filter. A selected level is not necessarily represented in IHSA data; “Regular Season” is a competition stage, not a Varsity/JV designation.</p><div class="notice warn" id="levelCoverage" aria-live="polite">Checking whether IHSA supplies verified team-level classifications…</div><div class="tabs" role="tablist" aria-label="Analytics sections"><button class="tab active" data-tab="records">Records &amp; scores</button><button class="tab" data-tab="standings">Standings</button><button class="tab" data-tab="compare">Compare</button><button class="tab" data-tab="postseason">Postseason</button><button class="tab" data-tab="diagnostics">API diagnostics</button></div></section>
@@ -164,7 +176,78 @@ function drawOfficialReference(){
   }
   $('officialReferenceNote').textContent=is2026?'IHSA snapshot date: Oct 25, 2026. “API all-completed” counts regular-season AND postseason games to match the website’s season-total scope. Unclassified game levels may make this a provisional comparison; a difference does not establish that either source is wrong.':'The source screenshot covers 2026–27 only. Other years are intentionally not cross-checked against these totals.';
 }
-function render(){updateHeader();updateLevelCoverage();drawRecords();calculateStandings();drawComparison();drawDiagnostics();drawOfficialReference()}
+
+/* A dated set of published facts from MaxPreps Lake Park varsity schedule, accessed Oct 25 2026.
+   Never treat this local list as a live MaxPreps feed or as current for another season. */
+const MAXPREPS_VARSITY_2026=[
+  ['2026-08-21','Plainfield North',15,22,false],
+  ['2026-08-28','Glenbard South',41,6,false],
+  ['2026-09-04','Wheaton North',15,24,true],
+  ['2026-09-11','Batavia',7,55,true],
+  ['2026-09-18','Geneva',15,41,true],
+  ['2026-09-25','Glenbard North',9,24,true],
+  ['2026-10-02','St. Charles East',35,21,true],
+  ['2026-10-09','Wheaton-Warrenville South',19,31,true],
+  ['2026-10-16','St. Charles North',13,49,true],
+  ['2026-10-23','Hinsdale Central',19,41,false],
+];
+function comparisonTeamKey(value){
+  const key=String(value||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const aliases={wwsouth:'wheatonwarrenvillesouth',wheatonwwarrenvillesouth:'wheatonwarrenvillesouth',stcharlesn:'stcharlesnorth',stcharlese:'stcharleseast'};
+  return aliases[key]||key;
+}
+function sameComparisonTeam(nameA,nameB){
+  const a=comparisonTeamKey(nameA),b=comparisonTeamKey(nameB);
+  return Boolean(a&&b&&(a===b||(a.length>7&&b.includes(a))||(b.length>7&&a.includes(b))));
+}
+function drawMaxprepsReference(){
+  const panel=$('maxprepsReference');
+  const enabled=sport.name==='Football'&&selectedProgram().name==='Boys Tackle'
+    &&$('level').value==='Varsity'&&$('season').value==='2026';
+  panel.classList.toggle('hide',!enabled);
+  if(!enabled)return;
+  const body=$('maxprepsRows');body.replaceChildren();
+  const dataset=feed?.ok?gamesForSelection().filter(g=>sameId(g.top.id,SCHOOL)||sameId(g.bottom.id,SCHOOL)):[];
+  let matched=0,differ=0,absent=0,mpAgree=0,mpDisagree=0;
+  for(const [date,opponent,lpScore,oppScore,conference] of MAXPREPS_VARSITY_2026){
+    const row=document.createElement('tr');
+    makeCell(row,localDate(date));
+    makeCell(row,opponent+(conference?' · conference':''));
+    makeCell(row,lpScore+'–'+oppScore);
+    let status='API not loaded',apiScore='—',mpStatus='—',kind='unavailable';
+    if(feed?.ok){
+      const sameDay=dataset.filter(g=>g.date===date);
+      const matches=sameDay.filter(g=>sameComparisonTeam(other(g,SCHOOL)?.name,opponent));
+      if(matches.length===1){
+        const game=matches[0];
+        const pair=scorePair(game,SCHOOL);
+        apiScore=game.hasScore?pair.join('–'):'—';
+        if(!isFinal(game)){status='Pending / unverified in API';differ++;kind='difference'}
+        else if(pair[0]===lpScore&&pair[1]===oppScore){status='Date · opponent · score match';matched++;kind='match'}
+        else{status='Score discrepancy · review';differ++;kind='difference'}
+        const mp=game.maxpreps||{};
+        if(mp.ihsaReportedAgreement===true){mpStatus='IHSA reports MP agreement';mpAgree++}
+        else if(mp.ihsaReportedAgreement===false){mpStatus='IHSA reports MP difference';mpDisagree++}
+        else mpStatus='Not reported by IHSA';
+        if(mp.embeddedScoreMatch===false){mpStatus+=' · embedded score differs';}
+      }else if(matches.length>1){status='Multiple matching API fixtures · review';differ++;kind='difference'}
+      else if(sameDay.length){status='Opponent not matched · review';absent++;kind='missing'}
+      else{status='Fixture not in retrieved API feed';absent++;kind='missing'}
+    }
+    makeCell(row,apiScore);
+    const cell=makeCell(row,status);cell.className=kind==='match'?'positive':kind==='difference'?'negative':'subtle';
+    makeCell(row,mpStatus);
+    body.append(row);
+  }
+  $('maxprepsMatched').textContent=feed?.ok?matched+'/10':'—';
+  $('maxprepsIssues').textContent=feed?.ok?(differ+absent)+' / 10':'—';
+  const note=$('maxprepsNotice');
+  if(!feed?.ok){note.textContent='IHSA API retrieval is unavailable or incomplete; MaxPreps fixture comparisons are pending. The dated 2–8 benchmark remains visible for context.';note.className='notice warn';return;}
+  const summary='Exact fixture + score matches: '+matched+'/10; different or pending: '+differ+'; not confidently found: '+absent+'. ';
+  note.textContent=summary+'The IHSA response also reports '+mpAgree+' MaxPreps agreements and '+mpDisagree+' discrepancies among matching fixtures. A game matching a public schedule provides stronger evidence of varsity classification, but the underlying sources may share MaxPreps information. Review any differences before publishing definitive records.';
+  note.className='notice'+(differ||absent?' warn':'');
+}
+function render(){updateHeader();updateLevelCoverage();drawRecords();calculateStandings();drawComparison();drawDiagnostics();drawOfficialReference();drawMaxprepsReference()}
 async function getAPI(query){const response=await fetch('/.netlify/functions/ihsa?'+new URLSearchParams(query),{headers:{accept:'application/json'}});const body=await response.json();if(!response.ok||!body.ok)throw Object.assign(new Error(body.error||`HTTP ${response.status}`),{payload:body});return body}
 async function load(force=false){const p=selectedProgram(),year=$('season').value,key=`${p.code}:${year}`,request=++liveRequest;$('refresh').disabled=true;markStatus(`Retrieving all advertised ${p.code} result pages for ${year}–${Number(year)+1}…`);
 try{const scoreTask=!force&&cache.has(key)?Promise.resolve(cache.get(key)):getAPI({action:'scores',sport:p.code,season:year});const schoolsTask=schoolFeed?.ok?Promise.resolve(schoolFeed):getAPI({action:'schools'}).catch(e=>({ok:false,error:e.message}));const [scores,schools]=await Promise.all([scoreTask,schoolsTask]);if(request!==liveRequest)return;feed=scores;schoolFeed=schools;cache.set(key,scores);$('sourceBadge').textContent='IHSA API · advertised pages retrieved';$('sourceBadge').className='tag';$('lastChecked').textContent=`Checked ${new Date(scores.checkedAt).toLocaleString()}`;markStatus(`${scores.pagesFetched} of ${scores.advertisedPages} pages loaded · ${scores.reportedTotalRecords??'?'} source football/sport contests reported · ${scores.matchedSeasonCount} results in selected school year · Data may omit unreported contests.`);
