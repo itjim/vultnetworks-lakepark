@@ -200,7 +200,8 @@ async function loadScores(code,season) {
     const category=String(row.category||'').trim().toLowerCase();
     if(!category)return false;
     if(code==='FB')return !category.includes('football')||category.includes('flag');
-    if(code==='FFG')return !category.includes('flag');
+    // Do not impose a category guard on FFG: the school may use the generic
+    // 'Football' category while identifying flag football via ActivityID='FFG'.
     return false;
   }
   const mismatchedCategory=code==='ALL'?[]:activityMatched.filter(categoryConflicts);
