@@ -79,8 +79,13 @@ export function normalizeScore(r) {
   );
   const hasScore=topScore!==null && bottomScore!==null;
   let winner=null;
+  const activityId=String(r.ActivityID||'').toUpperCase();
+  const isRegularSeason=String(r.TourneyLevel||'').toLowerCase().includes('regular');
   if(isFinal && hasScore) {
-    if(winnerCode==='T') winner='top';
+    // Soccer can finish level; IHSA's Winner "T" represents the TOP team,
+    // not a TIE. Only infer ties from equal scores for regular-season soccer.
+    if(['SOB','SOG'].includes(activityId)&&topScore===bottomScore&&isRegularSeason) winner='tie';
+    else if(winnerCode==='T') winner='top';
     else if(winnerCode==='B') winner='bottom';
     else if(String(top.TopTeamWin||top.TopMPResult||'').toUpperCase()==='Y'||String(top.TopMPResult||'').toUpperCase()==='W') winner='top';
     else if(String(bottom.BottomTeamWin||bottom.BottomMPResult||'').toUpperCase()==='Y'||String(bottom.BottomMPResult||'').toUpperCase()==='W') winner='bottom';
@@ -104,7 +109,7 @@ export function normalizeScore(r) {
   const date=parseDate(r.GameDate);
   const contestId=String(r.ContestID ?? r.Slug ?? `${date}-${topId}-${bottomId}`);
   return {
-    contestId, date, season:academicSeason(date), activityId:String(r.ActivityID||'').toUpperCase(),
+    contestId, date, season:academicSeason(date), activityId,
     category, gender, stage:String(r.TourneyLevel||'').trim(),
     top:{id:topId,name:shortName(top,'School '+topId),score:topScore},
     bottom:{id:bottomId,name:shortName(bottom,'School '+bottomId),score:bottomScore},
@@ -218,11 +223,29 @@ export default async function handler(request){
   const action=url.searchParams.get('action')||'scores';
   const code=String(url.searchParams.get('sport')||'FB').toUpperCase();
   const season=Number(url.searchParams.get('season')||'2026');
-  if(!['scores','overview','schools','school'].includes(action))return jsonResponse({ok:false,error:'Unsupported action'},400);
-  if((action==='scores'||action==='overview')&&(!SPORT_CODE.test(code)||!Number.isInteger(season)||season<2010||season>2040))return jsonResponse({ok:false,error:'Invalid sport code or season'},400);
+  if(!['scores','coverage','overview','schools','school'].includes(action))return jsonResponse({ok:false,error:'Unsupported action'},400);
+  if((action==='scores'||action==='coverage'||action==='overview')&&(!SPORT_CODE.test(code)||!Number.isInteger(season)||season<2010||season>2040))return jsonResponse({ok:false,error:'Invalid sport code or season'},400);
   try{
     if(action==='schools')return jsonResponse(await loadSchoolDirectory());
     if(action==='school')return jsonResponse(await loadSchool());
+    if(action==='coverage') {
+      const data=await loadScores(code,season);
+      if(!data.ok)return jsonResponse(data,502);
+      const lakeParkGames=data.games.filter(g=>[g.top.id,g.bottom.id].some(id=>normId(id)===SCHOOL_ID));
+      const finished=lakeParkGames.filter(g=>g.isFinal&&g.hasScore&&['top','bottom','tie'].includes(g.winner));
+      return jsonResponse({
+        ok:true,source:'IHSA API (reported contests only)',code,season,checkedAt:data.checkedAt,
+        pagesFetched:data.pagesFetched,advertisedPages:data.advertisedPages,
+        reportedTotalRecords:data.reportedTotalRecords,matchedSeasonCount:data.matchedSeasonCount,
+        excludedActivityCount:data.excludedActivityCount,excludedCategoryCount:data.excludedCategoryCount,
+        lakeParkContests:lakeParkGames.length,completedContests:finished.length,
+        finalWins:finished.filter(g=>(normId(g.top.id)===SCHOOL_ID&&g.winner==='top')||(normId(g.bottom.id)===SCHOOL_ID&&g.winner==='bottom')).length,
+        finalLosses:finished.filter(g=>(normId(g.top.id)===SCHOOL_ID&&g.winner==='bottom')||(normId(g.bottom.id)===SCHOOL_ID&&g.winner==='top')).length,
+        finalTies:finished.filter(g=>g.winner==='tie').length,
+        games:lakeParkGames,
+        note:'API returned these scored contests for the requested ActivityID. Retrieval of every advertised page does not establish full varsity season coverage.'
+      });
+    }
     if(action==='overview') {
       const data=await loadScores('ALL',season);
       if(!data.ok)return jsonResponse(data,502);
@@ -238,7 +261,7 @@ export default async function handler(request){
         totalReportedGames:data.matchedSeasonCount,reportedTotalRecords:data.reportedTotalRecords,
         advertisedPages:data.advertisedPages,pagesFetched:data.pagesFetched,allPagesFetched:true,
         lakeParkContests:lakeParkTotal,byActivity,
-        notes:'Counts of reported Lake Park contests; not an all-sport W/L standings table.'});
+        notes:'Partial source response, not a reliable all-sports audit. Use per-activity action=coverage for sport-specific counts.'});
     }
     const data=await loadScores(code,season);
     return jsonResponse(data,data.ok?200:502);
