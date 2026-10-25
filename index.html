@@ -285,11 +285,110 @@ async function getAPI(query){const response=await fetch('/.netlify/functions/ihs
 async function load(force=false){const p=selectedProgram(),year=$('season').value,key=`${p.code}:${year}`,request=++liveRequest;$('refresh').disabled=true;markStatus(`Retrieving all advertised ${p.code} result pages for ${year}–${Number(year)+1}…`);
 try{const scoreTask=!force&&cache.has(key)?Promise.resolve(cache.get(key)):getAPI({action:'scores',sport:p.code,season:year});const schoolsTask=schoolFeed?.ok?Promise.resolve(schoolFeed):getAPI({action:'schools'}).catch(e=>({ok:false,error:e.message}));const [scores,schools]=await Promise.all([scoreTask,schoolsTask]);if(request!==liveRequest)return;feed=scores;schoolFeed=schools;cache.set(key,scores);$('sourceBadge').textContent='IHSA API · advertised pages retrieved';$('sourceBadge').className='tag';$('lastChecked').textContent=`Checked ${new Date(scores.checkedAt).toLocaleString()}`;markStatus(`${scores.pagesFetched} of ${scores.advertisedPages} pages loaded · ${scores.reportedTotalRecords??'?'} source football/sport contests reported · ${scores.matchedSeasonCount} results in selected school year · Data may omit unreported contests.`);
 }catch(e){if(request!==liveRequest)return;feed={ok:false,error:e.message};$('sourceBadge').textContent='Data unavailable';$('sourceBadge').className='tag warn';markStatus(`IHSA import could not complete: ${e.message}. This does not mean Lake Park has no games; no incomplete records are displayed.`,true)}finally{if(request===liveRequest){$('refresh').disabled=false;render()}}}
-function chooseSport(s){sport=s;for(const btn of $('sportButtons').children){btn.classList.toggle('active',btn.dataset.sport===s.name)}setOptions('program',s.programs.map(p=>p.name));setOptions('level',s.levels);$('compareTeam').replaceChildren();load()}
+function chooseSport(s,preferredProgram=null){sport=s;for(const btn of $('sportButtons').children){btn.classList.toggle('active',btn.dataset.sport===s.name)}setOptions('program',s.programs.map(p=>p.name));if(preferredProgram&&s.programs.some(p=>p.name===preferredProgram))$('program').value=preferredProgram;setOptions('level',s.levels);$('compareTeam').replaceChildren();load()}
 for(const s of sports){const btn=document.createElement('button');btn.className='sport';btn.dataset.sport=s.name;const icon=document.createElement('span');icon.textContent=s.icon;btn.append(icon,document.createTextNode(s.name));btn.addEventListener('click',()=>chooseSport(s));$('sportButtons').append(btn)}
-$('program').addEventListener('change',()=>{const p=selectedProgram();$('compareTeam').replaceChildren();load()});$('level').addEventListener('change',render);$('season').addEventListener('change',()=>load());$('refresh').addEventListener('click',()=>{cache.delete(`${selectedProgram().code}:${$('season').value}`);load(true)});$('compareTeam').addEventListener('change',drawComparison);$('exportCsv').addEventListener('click',exportCsv);
-const OVERVIEW_SPORTS={FB:'Football · Boys Tackle',BB:'Basketball · Boys',GBB:'Basketball · Girls',BS:'Baseball',SB:'Softball',SC:'Soccer · Boys',GSC:'Soccer · Girls',VB:'Volleyball · Girls',BVB:'Volleyball · Boys',GO:'Golf · Boys',GGO:'Golf · Girls',TE:'Tennis · Boys',GTE:'Tennis · Girls',SW:'Swimming · Boys',GSW:'Swimming · Girls',TF:'Track & Field · Boys',GTF:'Track & Field · Girls',CC:'Cross Country · Boys',GCC:'Cross Country · Girls',WP:'Water Polo',WR:'Wrestling',LA:'Lacrosse',BW:'Bowling',GGY:'Gymnastics · Girls',GY:'Gymnastics · Boys',CH:'Competitive Cheer',DA:'Competitive Dance'};
-$('loadOverview').addEventListener('click',async()=>{const button=$('loadOverview'),yr=$('season').value;button.disabled=true;$('overviewStatus').textContent='Fetching full unfiltered IHSA score feed for '+yr+'…';$('overviewTotal').textContent='—';$('overviewPages').textContent='—';$('overviewBody').replaceChildren();try{const data=await getAPI({action:'overview',season:yr});$('overviewTotal').textContent=data.lakeParkContests;$('overviewPages').textContent=data.pagesFetched+'/'+data.advertisedPages;const rows=Object.entries(data.byActivity).sort((a,b)=>b[1]-a[1]);for(const [code,count] of rows){const tr=document.createElement('tr');makeCell(tr,(OVERVIEW_SPORTS[code]||code)+' ('+code+')');makeCell(tr,count);$('overviewBody').append(tr)}if(!rows.length)placeholder($('overviewBody'),2,'No Lake Park contests were present in the retrieved pages. This does not establish zero games played.');$('overviewStatus').textContent='Complete advertised feed retrieved at '+new Date(data.checkedAt).toLocaleString()+'. Source-reported contests only, not verified team levels or official standings.';}catch(e){$('overviewStatus').textContent='Could not complete all-sports import: '+e.message+'. No partial record is presented.';placeholder($('overviewBody'),2,'Data unavailable — try again later.')}finally{button.disabled=false}});
+$('program').addEventListener('change',()=>{const p=selectedProgram();$('compareTeam').replaceChildren();load()});$('level').addEventListener('change',render);$('season').addEventListener('change',()=>{coverageEpoch++;coverageBusy=false;$('loadOverview').disabled=false;$('loadAllScores').disabled=false;drawCoverageRows();load()});$('refresh').addEventListener('click',()=>{cache.delete(`${selectedProgram().code}:${$('season').value}`);load(true)});$('compareTeam').addEventListener('change',drawComparison);$('exportCsv').addEventListener('click',exportCsv);
+
+const SCORING_PROGRAMS=[
+ {code:'FB',sport:'Football',program:'Boys Tackle',name:'Football · tackle',season:'Fall',benchmark:[2,8,0]},
+ {code:'FFG',sport:'Football',program:'Girls Flag',name:'Football · girls flag',season:'Fall',benchmark:[14,5,0]},
+ {code:'SOB',sport:'Soccer',program:'Boys',name:'Soccer · boys',season:'Fall',benchmark:[13,8,1]},
+ {code:'VBG',sport:'Volleyball',program:'Girls',name:'Volleyball · girls',season:'Fall',benchmark:[20,11,0]},
+ {code:'BKB',sport:'Basketball',program:'Boys',name:'Basketball · boys',season:'Winter'},
+ {code:'BKG',sport:'Basketball',program:'Girls',name:'Basketball · girls',season:'Winter'},
+ {code:'SOG',sport:'Soccer',program:'Girls',name:'Soccer · girls',season:'Spring'},
+ {code:'VBB',sport:'Volleyball',program:'Boys',name:'Volleyball · boys',season:'Spring'},
+ {code:'BA',sport:'Baseball',program:'Boys',name:'Baseball',season:'Spring'},
+ {code:'SBG',sport:'Softball',program:'Girls',name:'Softball',season:'Spring'},
+ {code:'WPB',sport:'Water Polo',program:'Boys',name:'Water polo · boys',season:'Spring'},
+ {code:'WPG',sport:'Water Polo',program:'Girls',name:'Water polo · girls',season:'Spring'},
+ {code:'LCB',sport:'Lacrosse',program:'Boys',name:'Lacrosse · boys',season:'Spring'},
+ {code:'LCG',sport:'Lacrosse',program:'Girls',name:'Lacrosse · girls',season:'Spring'}
+];
+const COVERAGE_CODES=new Set(SCORING_PROGRAMS.map(p=>p.code));
+const coverageData=new Map(),coverageRows=new Map();
+let coverageEpoch=0,coverageBusy=false;
+function reviewYear(){return $('season').value}
+function coverageKey(code,year){return year+':'+code}
+function recordTriple(w,l,t){return w+'–'+l+(t?'–'+t:'')}
+function benchmarkText(spec,year){return spec.benchmark&&year==='2026'?recordTriple(...spec.benchmark):'—'}
+function coverageAssessment(spec,year,data){
+  if(!data)return 'Not checked';
+  if(data.error)return 'Unavailable: '+String(data.error).slice(0,115);
+  if(!Number.isInteger(data.lakeParkContests))return 'Unrecognized API response';
+  const finals=data.completedContests||0;
+  if(!finals)return data.lakeParkContests?'Schedule only; no completed scores in feed':'No scored contests in retrieved feed · NOT a season 0–0';
+  if(year==='2026'&&spec.benchmark){
+    const [w,l,t]=spec.benchmark,expected=w+l+t;
+    if(finals<expected)return 'Partial source: '+finals+' of '+expected+' published finals found · not complete';
+    if(finals===expected&&data.finalWins===w&&data.finalLosses===l&&data.finalTies===t)
+      return 'Published season totals agree numerically · team level provisional';
+    return 'Different from published season totals · review missing or extra games';
+  }
+  return finals+' scored contests reported; independently verified season coverage unavailable';
+}
+function drawCoverageRows(){
+  const body=$('overviewBody'),year=reviewYear();body.replaceChildren();coverageRows.clear();
+  let checked=0,total=0;
+  for(const spec of SCORING_PROGRAMS){
+    const key=coverageKey(spec.code,year),value=coverageData.get(key),tr=document.createElement('tr');
+    makeCell(tr,spec.season);
+    makeCell(tr,spec.name+' ('+spec.code+')');
+    const gameCell=makeCell(tr,value&&!value.error?value.lakeParkContests:'—');
+    const record=makeCell(tr,value&&!value.error&&value.completedContests?recordTriple(value.finalWins,value.finalLosses,value.finalTies):'—');
+    makeCell(tr,benchmarkText(spec,year));
+    const assessment=makeCell(tr,coverageAssessment(spec,year,value));
+    const buttons=makeCell(tr,'');
+    const button=document.createElement('button');button.type='button';button.className='btnsmall';
+    button.textContent='Explore';
+    button.addEventListener('click',()=>{
+      const target=sports.find(s=>s.name===spec.sport);
+      if(target){chooseSport(target,spec.program);$('sportTitle').scrollIntoView({behavior:'smooth',block:'center'})}
+    });
+    buttons.append(button);coverageRows.set(spec.code,{gameCell,record,assessment,spec});
+    if(value){checked++;if(!value.error)total+=(value.lakeParkContests||0)}
+    body.append(tr);
+  }
+  $('overviewTotal').textContent=checked+'/'+SCORING_PROGRAMS.length;
+  $('overviewPages').textContent=total;
+}
+async function runCoverageAudit(all=false){
+  if(coverageBusy)return;
+  const year=reviewYear(),epoch=++coverageEpoch;
+  coverageBusy=true;
+  $('loadOverview').disabled=true;$('loadAllScores').disabled=true;
+  const programs=SCORING_PROGRAMS.filter(s=>all||s.season==='Fall');
+  let next=0,done=0,ok=0,failed=0;
+  $('overviewStatus').textContent='Checking '+programs.length+' activity feeds, two at a time. This can take a minute; each feed is independently paginated.';
+  drawCoverageRows();
+  async function worker(){
+    while(next<programs.length){
+      const item=programs[next++];
+      if(epoch!==coverageEpoch)break;
+      const row=coverageRows.get(item.code);
+      if(row)row.assessment.textContent='Fetching IHSA '+item.code+'…';
+      try{
+        const data=await getAPI({action:'coverage',sport:item.code,season:year});
+        if(epoch!==coverageEpoch)break;
+        coverageData.set(coverageKey(item.code,year),data);ok++;
+      }catch(e){
+        if(epoch!==coverageEpoch)break;
+        coverageData.set(coverageKey(item.code,year),{error:e.message});failed++;
+      }
+      done++;
+      drawCoverageRows();
+      $('overviewStatus').textContent='Completed '+done+'/'+programs.length+' requested feeds; '+ok+' returned data; '+failed+' unavailable. Every count is only the number of matches reported by IHSA, not an official school season total.';
+    }
+  }
+  await Promise.all([worker(),worker()]);
+  if(epoch===coverageEpoch){
+    $('overviewStatus').textContent='Checked '+done+'/'+programs.length+' requested team-sport feeds · '+ok+' responses · '+failed+' failures. An exact match to the IHSA school-record snapshot is the strongest numeric validation available here; mismatches are flagged rather than filled with invented data.';
+    coverageBusy=false;$('loadOverview').disabled=false;$('loadAllScores').disabled=false;
+  }
+}
+$('loadOverview').addEventListener('click',()=>runCoverageAudit(false));
+$('loadAllScores').addEventListener('click',()=>runCoverageAudit(true));
+drawCoverageRows();
 
 for(const btn of document.querySelectorAll('[data-tab]'))btn.addEventListener('click',()=>{activeTab=btn.dataset.tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b===btn));document.querySelectorAll('.tabpage').forEach(s=>s.classList.toggle('hide',s.id!==activeTab))});
 chooseSport(sports[0]);
