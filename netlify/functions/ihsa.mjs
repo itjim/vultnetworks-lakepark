@@ -14,15 +14,19 @@ const SPORT_CODE = /^[A-Z]{2,4}$/;
 const memoryCache = new Map();
 
 function jsonResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'public, max-age=120',
-      'netlify-cdn-cache-control': 'public, s-maxage=720, stale-while-revalidate=360',
-      'x-content-type-options': 'nosniff',
-    },
-  });
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  };
+  if (status >= 400) {
+    // Never cache transient upstream errors as if they were healthy results.
+    headers['cache-control'] = 'no-store';
+    headers['netlify-cdn-cache-control'] = 'no-store';
+  } else {
+    headers['cache-control'] = 'public, max-age=120';
+    headers['netlify-cdn-cache-control'] = 'public, s-maxage=720, stale-while-revalidate=360';
+  }
+  return new Response(JSON.stringify(body), {status, headers});
 }
 export function normId(value) {
   if (value == null) return '';
@@ -160,11 +164,19 @@ async function loadScores(code,season) {
   const pages=new Array(advertisedPages);pages[0]=firstData;
   const failures=[];
   let index=2;
-  async function worker(){while(true){const page=index++;if(page>advertisedPages)return;try{const data=await upstream(url(page));const list=getData(data);if(!list)throw new Error('data array not found');pages[page-1]=list;}catch(e){failures.push({page,error:String(e.message||e)})}}}
+  async function worker(){while(true){const page=index++;if(page>advertisedPages)return;try{const data=await upstream(url(page));const list=getData(data);if(!list)throw new Error('data array not found');
+      const info=data.pagination||{};
+      if(Number(info.currentPage)!==page)throw new Error(`pagination.currentPage ${info.currentPage} did not match ${page}`);
+      if(Number(info.totalPages)!==advertisedPages)throw new Error(`pagination.totalPages changed from ${advertisedPages} to ${info.totalPages}`);
+      pages[page-1]=list;}catch(e){failures.push({page,error:String(e.message||e)})}}}
   await Promise.all(Array.from({length:Math.min(CONCURRENCY,Math.max(0,advertisedPages-1))},()=>worker()));
-  const complete=failures.length===0&&pages.every(Array.isArray);
+  let complete=failures.length===0&&pages.every(Array.isArray);
   const map=new Map();let rawCount=0,invalidCount=0;
   for(const page of pages){if(!page)continue;rawCount+=page.length;for(const row of page){const normalized=normalizeScore(row);if(!normalized){invalidCount++;continue;}map.set(normalized.contestId,normalized)}}
+  if(complete && Number.isFinite(totalRecords) && rawCount!==totalRecords) {
+    complete=false;
+    failures.push({page:'all',error:`pagination reported ${totalRecords} records but retrieved ${rawCount}; refusing to call the dataset complete`});
+  }
   const all=Array.from(map.values());
   const matched=all.filter(r=>r.season===season);
   const availableSeasons=Array.from(new Set(all.map(r=>r.season).filter(Boolean))).sort((a,b)=>b-a);
