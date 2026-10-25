@@ -188,7 +188,7 @@ function exportCsv(){
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`lakepark-${sport.name.toLowerCase().replaceAll(' ','-')}-${$('season').value}-results.csv`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function localDate(iso){if(!iso)return 'Date unavailable';const [y,m,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString('en-US',{timeZone:'UTC',month:'short',day:'numeric',year:'numeric'})}
-function levelWarning(){if($('level').value!=='Varsity')return 'The IHSA scores feed does not provide verified coverage for this sub-varsity level. Do not interpret an empty table as zero games.';return 'IHSA records lacking an explicit level are shown in the Varsity view provisionally. Confirm team level from the official source before relying on these records.'}
+function levelWarning(){if(selectedProgram().code==='FB'&&$('season').value==='2026')return 'Tackle football has a dated game-by-game varsity schedule cross-check against MaxPreps. Other seasons and sports may not have equally complete team-level validation.';return 'IHSA generally does not provide an explicit team level; these are source-reported contests and not guaranteed to represent every first-team or varsity game.'}
 function markStatus(message,error=false){$('status').className='notice'+(error?' warn':'');$('status').textContent=message;}
 const PROGRAM_SOURCE_LINKS={
   FB:{label:'MaxPreps varsity schedule',url:'https://www.maxpreps.com/il/roselle/lake-park-lancers/football/schedule/'},
@@ -198,6 +198,8 @@ const PROGRAM_SOURCE_LINKS={
 };
 function updateHeader(){
  const p=selectedProgram();$('sportTitle').textContent=sport.icon+' '+sport.name;
+ $('featuredPrograms').hidden=$('season').value!=='2026';
+ for(const tile of document.querySelectorAll('[data-feature]'))tile.classList.toggle('feature-active',$('season').value==='2026'&&tile.dataset.feature===p.code);
  $('context').textContent=`${p.name} · ${$('level').value} · ${$('season').selectedOptions[0].textContent}`;
  const target=$('selectedSources');target.replaceChildren();
  const note=document.createElement('span');note.textContent='IHSA activity ID '+p.code+'. Public data source: ';
@@ -212,20 +214,30 @@ function updateHeader(){
  else target.append(document.createTextNode(' · Source-link review pending for this program'));
 }
 function updateLevelCoverage(){
-const panel=$('levelCoverage'),sel=$('level'),program=selectedProgram();
-if(!feed?.ok){panel.textContent='IHSA level coverage has not been established. Varsity, JV, Sophomore and Freshman are navigation options, not proof that the feed tracks those teams.';panel.className='notice warn';return;}
-const reported=seasonGames().filter(g=>programMatch(g)&&(sameId(g.top.id,SCHOOL)||sameId(g.bottom.id,SCHOOL)));
-const unlabeled=reported.filter(g=>!term(g.level)).length;
-const labeled=reported.filter(g=>Boolean(term(g.level)));
-for(const opt of sel.options){const explicit=labeled.filter(g=>levelMatch(g,opt.value)).length;
-if(opt.value==='Varsity'){opt.textContent=unlabeled?`Varsity · ${unlabeled} unclassified`:`Varsity · ${explicit} level-tagged`;}
-else opt.textContent=explicit?`${opt.value} · ${explicit} reported`:`${opt.value} · not identified`;}
-const selected=sel.value, matched=labeled.filter(g=>levelMatch(g,selected)).length;
-if(selected!=='Varsity'&&!matched){panel.textContent=`IHSA does not explicitly identify any Lake Park ${program.name} ${selected} results in the retrieved ${$('season').selectedOptions[0].textContent} feed. This is a source coverage limitation, NOT evidence that the team played zero games. A separate school schedule or verified sub-varsity feed is needed.`;panel.className='notice warn';return;}
-if(selected==='Varsity'&&unlabeled){panel.textContent=`${unlabeled} of ${reported.length} Lake Park ${program.name} contests have no explicit team level in the IHSA response. They are displayed under Varsity provisionally for exploration, NOT confirmed as varsity games; ${matched} contests explicitly identify Varsity. Records and comparisons should be verified against the school's varsity schedule before publication.`;panel.className='notice warn';return;}
-panel.textContent=matched?`${matched} reported ${program.name} ${selected} contests include an explicit matching level. Data can still be missing or corrected.`:`No reported Lake Park ${program.name} contests were identified under this filter. This does not establish zero games.`;
-panel.className=matched?'notice':'notice warn';}
-
+ const el=$('levelCoverage'),program=selectedProgram(),code=program.code;
+ const selectedYear=$('season').value;
+ if(!feed?.ok){el.textContent='Source results are being retrieved. Published school totals and API results are different kinds of evidence; no absent game will be counted as a loss.';el.className='notice warn';return;}
+ const reported=seasonGames().filter(g=>programMatch(g)&&(sameId(g.top.id,SCHOOL)||sameId(g.bottom.id,SCHOOL)));
+ const snapshot=selectedYear==='2026'?IHSA_OVERVIEW_SNAPSHOT.find(x=>x.code===code):null;
+ if(code==='FB'&&selectedYear==='2026'){
+   const matched=MAXPREPS_VARSITY_2026.filter(([date,opponent,pf,pa])=>
+     reported.some(g=>g.date===date&&sameComparisonTeam(other(g,SCHOOL)?.name,opponent)&&isFinal(g)&&
+       scorePair(g,SCHOOL)[0]===pf&&scorePair(g,SCHOOL)[1]===pa)).length;
+   const ok=matched===10&&reported.length===10;
+   el.textContent=ok?'2026 varsity football verified against the published MaxPreps schedule: 10/10 dates, opponents and scores agree with IHSA. The IHSA API itself does not label levels; the varsity classification comes from the separate varsity schedule.':matched+'/10 of the 2026 MaxPreps varsity fixtures match the currently retrieved IHSA feed; '+reported.length+' football contests appear. Do not treat this as the complete varsity record until reconciliation.';
+   el.className='notice'+(ok?'':' warn');return;
+ }
+ if(snapshot){
+   const calc=allCompletedSummary(reported,SCHOOL);
+   const agrees=calc.played===snapshot.w+snapshot.l+snapshot.t&&calc.w===snapshot.w&&calc.l===snapshot.l&&calc.t===snapshot.t;
+   el.textContent=agrees?'IHSA API game totals agree numerically with the published '+statText(snapshot)+' school record as of Oct 25, 2026. Team level is not explicitly tagged by the API; source verification remains provisional.':'IHSA school overview reports '+statText(snapshot)+' for this program; the separately requested scoreboard feed has '+calc.played+' completed Lake Park contests (plus any pending). This can be a partial feed. The published school record appears above; table totals describe only the retrieved games.';
+   el.className='notice'+(agrees?'':' warn');return;
+ }
+ const completed=reported.filter(isFinal).length;
+ const kind=isTeamScoring()?'scored matches':'reported events';
+ el.textContent='IHSA reports '+reported.length+' Lake Park '+kind+' in this '+selectedYear+' source feed ('+completed+' completed). Source results may be incomplete and do not certify Varsity/JV team levels; no school-wide record is assumed from an incomplete feed.';
+ el.className='notice'+(reported.length?'':' warn');
+}
 function drawRecords(){const data=gamesForSelection(),all=seasonGames(),lp=data.filter(g=>sameId(g.top.id,SCHOOL)||sameId(g.bottom.id,SCHOOL));const regular=lp.filter(isRegular);
 const stat=gameResultSummary(regular,SCHOOL),overall=allCompletedSummary(lp,SCHOOL);
 const supported=isTeamScoring(),unit=SCORE_UNITS[selectedProgram().code]||'Reported score';
@@ -238,7 +250,10 @@ $('record').textContent=feed?.ok&&supported&&stat.played?statText(stat):'—';
 $('overallRecord').textContent=feed?.ok&&supported&&overall.played?statText(overall):'—';
 $('pointsFor').textContent=feed?.ok&&supported&&overall.played?pointsFor:'—';
 $('pointsAgainst').textContent=feed?.ok&&supported&&overall.played?pointsAgainst:'—';
-const p=selectedProgram();const excluded=(feed?.excludedActivityCount||0)+(feed?.excludedCategoryCount||0);
+const p=selectedProgram();const published=$('season').value==='2026'?IHSA_OVERVIEW_SNAPSHOT.find(x=>x.code===p.code):null;
+ const ref=$('publishedRecordBlock');ref.hidden=!published;
+ if(published){$('publishedRecordValue').textContent=statText(published);$('publishedRecordContext').textContent=' · IHSA school overview snapshot, Oct 25, 2026. Not a live record. The table and metrics below reflect API-reported games only.';}
+ const excluded=(feed?.excludedActivityCount||0)+(feed?.excludedCategoryCount||0);
 const sourceHealth=feed?.ok?`All ${feed.pagesFetched}/${feed.advertisedPages} advertised API pages retrieved; ${feed.matchedSeasonCount} matching-sport rows across schools this season, ${lp.length} Lake Park matches. ${excluded?excluded+' unrelated or conflicting sport rows were excluded from the source response. ':''}These totals reflect API coverage, not guaranteed school reporting.`:'The feed is unavailable or incomplete. No season record is calculated.';
 const classificationNote=supported?'Reported W–L–T and '+unit.toLowerCase()+' totals are calculated only from scored team contests.':'This is a meet/event/individual sport: a generic win–loss record is intentionally not calculated from event entries. Tournament placements require a sport-specific source.';
 $('recordNotice').textContent=`${sourceHealth} ${classificationNote} ${levelWarning()}${p.mapping==='shared'?' Gender-ambiguous source rows are intentionally excluded.':''}`;
@@ -560,6 +575,11 @@ async function runCoverageAudit(all=false){
     coverageBusy=false;$('loadOverview').disabled=false;$('loadAllScores').disabled=false;
   }
 }
+for(const tile of document.querySelectorAll('[data-feature]'))tile.addEventListener('click',()=>{
+  const spec=SCORING_PROGRAMS.find(p=>p.code===tile.dataset.feature);
+  const target=spec?sports.find(s=>s.name===spec.sport):null;
+  if(target){chooseSport(target,spec.program);$('teamExplorer').scrollIntoView({behavior:'smooth',block:'start'});}
+});
 $('loadOverview').addEventListener('click',()=>runCoverageAudit(false));
 $('loadAllScores').addEventListener('click',()=>runCoverageAudit(true));
 drawCoverageRows();
