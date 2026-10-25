@@ -45,6 +45,16 @@ main{max-width:1140px;margin:0 auto;padding:18px 16px 45px}h2{font-size:1.28rem;
 <script>
 'use strict';
 const SCHOOL='1829', $=id=>document.getElementById(id);
+// Keep sport navigation and interactive records above the lengthy reference panels.
+(function moveExplorerNearTop(){
+  const reference=$('officialReference'),root=reference?.parentElement;
+  if(!root)return;
+  const chooser=$('sportButtons')?.closest('section');
+  const explorer=$('program')?.closest('section');
+  for(const section of [chooser,explorer,$('records'),$('standings'),$('compare'),$('postseason'),$('diagnostics')]){
+    if(section&&section.parentElement===root)root.insertBefore(section,reference);
+  }
+})();
 const sports=[
   {name:'Football',icon:'🏈',programs:[{name:'Boys Tackle',code:'FB',mapping:'confirmed'},{name:'Girls Flag',code:'FFG',mapping:'candidate',requireFlag:true}],levels:['Varsity','JV','Sophomore','Freshman']},
   {name:'Basketball',icon:'🏀',programs:[{name:'Boys',code:'BB',mapping:'confirmed'},{name:'Girls',code:'GBB',mapping:'confirmed'}],levels:['Varsity','JV','Sophomore','Freshman']},
